@@ -238,7 +238,7 @@ export default function Dashboard() {
             onClick={() => navigate('/cart')}
             className="hover:opacity-80 transition relative"
           >
-            <img src="/icons/cart.png" alt="Cart" className="w-6 h-6" />
+            <img src="/icons/cart.png" alt="Cart" className="w-6 h-6 invert brightness-0" />
             {cartCount > 0 && (
               <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
                 {cartCount}
@@ -249,7 +249,7 @@ export default function Dashboard() {
             onClick={() => navigate('/profile')}
             className="hover:opacity-80 transition"
           >
-            <img src="/icons/acc.png" alt="User" className="w-6 h-6" />
+            <img src="/icons/acc.png" alt="User" className="w-6 h-6 invert brightness-0" />
           </button>
         </div>
       </header>

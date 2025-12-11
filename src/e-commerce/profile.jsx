@@ -90,9 +90,23 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("auth");
-    navigate("/", { state: { openLogin: true } }); // ← AUTO OPEN LOGIN MODAL
+  // 🔥 UPDATED LOGOUT FUNCTION - REPLACE THE OLD ONE
+  const handleLogout = async () => {
+    try {
+      // Sign out from Supabase (if using auth)
+      await supabase.auth.signOut();
+      
+      // Clear local storage
+      localStorage.removeItem("auth");
+      
+      // Navigate to landing
+      navigate("/", { replace: true });
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Force clear even on error
+      localStorage.removeItem("auth");
+      navigate("/", { replace: true });
+    }
   };
 
   const getStatusColor = (status) => {

@@ -19,7 +19,7 @@ function App() {
 
   // Check for existing session on mount
   useEffect(() => {
-    checkSession();
+    initializeAuth();
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -32,14 +32,32 @@ function App() {
         setCurrentRole(null);
         setIsAuthenticated(false);
         localStorage.removeItem("auth");
+        setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkSession = async () => {
+  const initializeAuth = async () => {
     try {
+      // First check localStorage for faster initial load
+      const stored = localStorage.getItem("auth");
+      if (stored) {
+        const authData = JSON.parse(stored);
+        if (authData.userId && authData.isAuthenticated) {
+          // Temporarily set auth state from localStorage
+          setCurrentUser(authData.user);
+          setCurrentRole(authData.role);
+          setIsAuthenticated(true);
+          
+          // Then verify with Supabase in the background
+          await verifyAndLoadProfile(authData.userId);
+          return;
+        }
+      }
+
+      // If no localStorage, check Supabase session
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error) {
@@ -54,70 +72,39 @@ function App() {
         setLoading(false);
       }
     } catch (error) {
-      console.error("Session check error:", error);
+      console.error("Initialize auth error:", error);
+      setLoading(false);
+    }
+  };
+
+  const verifyAndLoadProfile = async (userId) => {
+    try {
+      await loadUserProfile(userId);
+    } catch (error) {
+      console.error("Profile verification error:", error);
+      // If verification fails, clear auth
+      localStorage.removeItem("auth");
+      setCurrentUser(null);
+      setCurrentRole(null);
+      setIsAuthenticated(false);
       setLoading(false);
     }
   };
 
   const loadUserProfile = async (userId) => {
     try {
-      // Add retry logic for profile fetch
-      let attempts = 0;
-      let profileData = null;
-      let error = null;
+      // Check users table first
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-      while (attempts < 3 && !profileData) {
-        const result = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
+      if (userError) throw userError;
 
-        profileData = result.data;
-        error = result.error;
-
-        if (error && attempts < 2) {
-          console.log(`Profile fetch attempt ${attempts + 1} failed, retrying...`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          attempts++;
-        } else {
-          break;
-        }
-      }
-
-      if (error) {
-        console.error("Profile load error after retries:", error);
-        // If profile doesn't exist, create it
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (user) {
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert([{
-              id: user.id,
-              email: user.email,
-              full_name: user.user_metadata?.full_name || 'User',
-              role: 'user'
-            }]);
-
-          if (insertError && insertError.code !== '23505') {
-            console.error("Profile creation error:", insertError);
-          } else {
-            // Try fetching again
-            const { data: newProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', userId)
-              .single();
-            
-            profileData = newProfile;
-          }
-        }
-      }
-
-      if (profileData) {
-        const role = profileData.role || 'user';
-        const email = profileData.email || '';
+      if (userData) {
+        const role = userData.role || 'user';
+        const email = userData.email || '';
 
         setCurrentUser(email);
         setCurrentRole(role);
@@ -135,6 +122,11 @@ function App() {
       }
     } catch (error) {
       console.error("Profile load error:", error);
+      // Clear invalid auth state
+      localStorage.removeItem("auth");
+      setCurrentUser(null);
+      setCurrentRole(null);
+      setIsAuthenticated(false);
     } finally {
       setLoading(false);
     }
