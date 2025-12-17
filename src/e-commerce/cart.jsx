@@ -319,7 +319,7 @@ export default function Cart() {
             onClick={() => navigate("/profile")}
             className="hover:opacity-80 transition"
           >
-            <img src="/icons/acc.png" alt="User" className="w-6 h-6" />
+            <img src="/icons/acc.png" alt="User" className="w-6 h-6  brightness-0" />
           </button>
         </div>
       </header>
