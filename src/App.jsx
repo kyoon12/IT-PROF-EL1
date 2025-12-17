@@ -150,7 +150,7 @@ function App() {
     );
 
     // Small delay to ensure state is set
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     // Redirect after login
     if (role === "admin") {
