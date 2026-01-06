@@ -90,10 +90,10 @@ export default function AdminDashboard() {
 
       console.log("Starting upload for:", filename);
 
-      // Upload to Supabase Storage
+      // Upload to Supabase Storage (try without products/ prefix if that fails)
       const { data, error } = await supabase.storage
         .from("product_images")
-        .upload(`products/${filename}`, file, {
+        .upload(filename, file, {
           cacheControl: '3600',
           upsert: false
         });
@@ -111,10 +111,10 @@ export default function AdminDashboard() {
 
       console.log("Upload successful:", data);
 
-      // Get public URL
+      // Get public URL (without products/ prefix)
       const { data: publicUrlData } = supabase.storage
         .from("product_images")
-        .getPublicUrl(`products/${filename}`);
+        .getPublicUrl(filename);
 
       console.log("Public URL:", publicUrlData.publicUrl);
       return publicUrlData.publicUrl;
