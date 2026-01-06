@@ -88,22 +88,40 @@ export default function AdminDashboard() {
       const randomId = Math.random().toString(36).substring(2, 9);
       const filename = `product_${timestamp}_${randomId}_${file.name}`;
 
+      console.log("Starting upload for:", filename);
+
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
         .from("product_images")
-        .upload(`products/${filename}`, file);
+        .upload(`products/${filename}`, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Upload error details:", error);
+        
+        if (error.message.includes("Bucket not found")) {
+          alert("❌ Storage bucket 'product_images' not found.\n\nPlease:\n1. Go to Supabase Dashboard\n2. Click Storage\n3. Create new bucket named 'product_images'\n4. Make it PUBLIC\n5. Try again");
+          return null;
+        }
+        
+        throw error;
+      }
+
+      console.log("Upload successful:", data);
 
       // Get public URL
       const { data: publicUrlData } = supabase.storage
         .from("product_images")
         .getPublicUrl(`products/${filename}`);
 
+      console.log("Public URL:", publicUrlData.publicUrl);
       return publicUrlData.publicUrl;
+      
     } catch (error) {
       console.error("Error uploading image:", error);
-      alert("Failed to upload image");
+      alert(`❌ Failed to upload image:\n${error.message}`);
       return null;
     } finally {
       setUploadingImage(false);
@@ -145,7 +163,7 @@ export default function AdminDashboard() {
 
       if (error) throw error;
 
-      alert("Product added successfully!");
+      alert("✅ Product added successfully!");
       setFormData({
         name: "",
         price: "",
@@ -158,7 +176,7 @@ export default function AdminDashboard() {
       await fetchProducts();
     } catch (error) {
       console.error("Error adding product:", error);
-      alert("Failed to add product");
+      alert("Failed to add product: " + error.message);
     }
   };
 
