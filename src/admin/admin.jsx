@@ -9,11 +9,13 @@ export default function AdminDashboard() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     price: "",
     category: "Unisex",
-    image_url: "",
     description: ""
   });
 
@@ -51,16 +53,82 @@ export default function AdminDashboard() {
     }));
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert("Please select a valid image file");
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Image size must be less than 5MB");
+        return;
+      }
+
+      setImageFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadImage = async (file) => {
+    try {
+      setUploadingImage(true);
+      
+      // Create unique filename
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 9);
+      const filename = `product_${timestamp}_${randomId}_${file.name}`;
+
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from("product_images")
+        .upload(`products/${filename}`, file);
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: publicUrlData } = supabase.storage
+        .from("product_images")
+        .getPublicUrl(`products/${filename}`);
+
+      return publicUrlData.publicUrl;
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      alert("Failed to upload image");
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleAddProduct = async (e) => {
     e.preventDefault();
 
     // Validation
-    if (!formData.name || !formData.price || !formData.image_url) {
-      alert("Please fill in all required fields");
+    if (!formData.name || !formData.price || !imageFile) {
+      alert("Please fill in all required fields including image");
       return;
     }
 
     try {
+      // Upload image first
+      const imageUrl = await uploadImage(imageFile);
+      
+      if (!imageUrl) {
+        alert("Failed to upload image. Please try again.");
+        return;
+      }
+
+      // Insert product with image URL
       const { data, error } = await supabase
         .from("products")
         .insert([
@@ -68,7 +136,7 @@ export default function AdminDashboard() {
             name: formData.name,
             price: parseFloat(formData.price),
             category: formData.category,
-            image_url: formData.image_url,
+            image_url: imageUrl,
             description: formData.description,
             is_active: true
           }
@@ -82,9 +150,10 @@ export default function AdminDashboard() {
         name: "",
         price: "",
         category: "Unisex",
-        image_url: "",
         description: ""
       });
+      setImageFile(null);
+      setImagePreview(null);
       setShowAddProductModal(false);
       await fetchProducts();
     } catch (error) {
@@ -109,6 +178,18 @@ export default function AdminDashboard() {
       console.error("Error deleting product:", error);
       alert("Failed to delete product");
     }
+  };
+
+  const closeModal = () => {
+    setShowAddProductModal(false);
+    setImageFile(null);
+    setImagePreview(null);
+    setFormData({
+      name: "",
+      price: "",
+      category: "Unisex",
+      description: ""
+    });
   };
 
   if (loading) {
@@ -455,9 +536,9 @@ export default function AdminDashboard() {
       {/* ADD PRODUCT MODAL */}
       {showAddProductModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="relative w-[90%] max-w-md bg-white rounded-2xl shadow-2xl p-6">
+          <div className="relative w-[90%] max-w-md bg-white rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
             <button
-              onClick={() => setShowAddProductModal(false)}
+              onClick={closeModal}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold"
             >
               ×
@@ -516,20 +597,51 @@ export default function AdminDashboard() {
                 </select>
               </div>
 
-              {/* Image URL */}
+              {/* Image Upload */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Image URL *
+                  Product Image *
                 </label>
-                <input
-                  type="url"
-                  name="image_url"
-                  value={formData.image_url}
-                  onChange={handleInputChange}
-                  placeholder="https://example.com/image.jpg"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  required
-                />
+                
+                {/* File Input */}
+                <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-orange-500 transition bg-gray-50">
+                  <div className="text-center">
+                    <svg className="w-6 h-6 mx-auto text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <p className="text-sm text-gray-600">
+                      {imageFile ? imageFile.name : "Click to upload image"}
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    required
+                  />
+                </label>
+
+                {/* Image Preview */}
+                {imagePreview && (
+                  <div className="mt-3 relative">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-full h-48 object-cover rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageFile(null);
+                        setImagePreview(null);
+                      }}
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold hover:bg-red-600"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Description */}
@@ -551,16 +663,17 @@ export default function AdminDashboard() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddProductModal(false)}
+                  onClick={closeModal}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition"
+                  disabled={uploadingImage}
+                  className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Add Product
+                  {uploadingImage ? "Uploading..." : "Add Product"}
                 </button>
               </div>
             </form>
